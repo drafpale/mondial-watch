@@ -1,0 +1,64 @@
+# Наблюдение за сайтом снаружи: /api/health и главная — код, время ответа, название магазина;
+# раз в сутки — карта сайта. Проверка не прошла два раза подряд — job падает, GitHub пишет об
+# этом на почту владельца репозитория (Settings → Notifications → Actions: «Send notifications
+# for failed workflows only»); с secrets TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID сообщение уходит
+# ещё и в Telegram. Проверки — watch.sh (копия из репозитория сайта).
+#
+# Репозиторий публичный: минуты Actions здесь не считаются, поэтому расписание — раз в
+# 10 минут. Настройки: variable SITE_URL — адрес сайта.
+name: watch
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+    # карта сайта — раз в сутки
+    - cron: '0 3 * * *'
+    # первого числа — пустой коммит: без активности 60 дней GitHub выключает расписание
+    - cron: '0 4 1 * *'
+  workflow_dispatch:
+    inputs:
+      sitemap:
+        description: Проверить и карту сайта
+        type: boolean
+        default: true
+
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    if: github.event.schedule != '0 4 1 * *'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверка сайта
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WATCH_SITEMAP: ${{ (inputs.sitemap || github.event.schedule == '0 3 * * *') && '1' || '' }}
+        # shell: bash включает pipefail — без него код выхода проверки терялся бы в tee
+        shell: bash
+        run: bash watch.sh | tee -a "$GITHUB_STEP_SUMMARY"
+
+  keepalive:
+    if: github.event.schedule == '0 4 1 * *'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Пустой коммит
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit --allow-empty -m "Расписание живо: $(date -u +%Y-%m)"
+          git push
