@@ -10,11 +10,12 @@ name: watch
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    # минуты не круглые: в начале часа очередь расписаний GitHub самая длинная
+    - cron: '3-59/10 * * * *'
     # карта сайта — раз в сутки
-    - cron: '0 3 * * *'
+    - cron: '7 3 * * *'
     # первого числа — пустой коммит: без активности 60 дней GitHub выключает расписание
-    - cron: '0 4 1 * *'
+    - cron: '17 4 1 * *'
   workflow_dispatch:
     inputs:
       sitemap:
@@ -31,7 +32,7 @@ permissions:
 
 jobs:
   watch:
-    if: github.event.schedule != '0 4 1 * *'
+    if: github.event.schedule != '17 4 1 * *'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -42,13 +43,13 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WATCH_SITEMAP: ${{ (inputs.sitemap || github.event.schedule == '0 3 * * *') && '1' || '' }}
+          WATCH_SITEMAP: ${{ (inputs.sitemap || github.event.schedule == '7 3 * * *') && '1' || '' }}
         # shell: bash включает pipefail — без него код выхода проверки терялся бы в tee
         shell: bash
         run: bash watch.sh | tee -a "$GITHUB_STEP_SUMMARY"
 
   keepalive:
-    if: github.event.schedule == '0 4 1 * *'
+    if: github.event.schedule == '17 4 1 * *'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
